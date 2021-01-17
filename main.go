@@ -1,13 +1,22 @@
 package main
 
 import (
-	"fmt"
 	"log"
+	"fmt"
 
 	"github.com/gocolly/colly"
 )
 
-func main() {
+type House struct {
+	price string
+}
+
+type Olx struct {
+	scraper *colly.Collector
+	entries map[string]House
+}
+
+func NewOlx() *Olx {
 
 	c := colly.NewCollector(
 	//colly.Debugger(&debug.LogDebugger{}),
@@ -18,10 +27,18 @@ func main() {
 	})
 
 	c.OnRequest(func(r *colly.Request) {
-		fmt.Println("Opening", r.URL.String())
+		log.Println("Opening", r.URL.String())
 	})
 
-	c.OnHTML("td[class='title-cell ']", func(e *colly.HTMLElement) {
+	return &Olx{
+		c,
+		make(map[string]House),
+	}
+}
+
+func (o *Olx) Run(url string) {
+
+	o.scraper.OnHTML("td[class='title-cell ']", func(e *colly.HTMLElement) {
 		goquery := e.DOM
 
 		attr, _ := goquery.Children().Children().Find("a").Attr("href")
@@ -29,13 +46,27 @@ func main() {
 		e.Request.Visit(attr)
 	})
 
-	c.OnHTML("div[class='pricelabel']", func(e *colly.HTMLElement) {
+	o.scraper.OnHTML("div[class='pricelabel']", func(e *colly.HTMLElement) {
 		goquery := e.DOM
 
 		attr := goquery.Find("strong").Text()
-		fmt.Println(attr)
+
+		o.entries[e.Request.URL.String()] = House{attr}
+
 	})
 
-	c.Visit("https://www.olx.pt/imoveis/")
+	o.scraper.Visit(url)
+
+}
+func main() {
+
+	olx := NewOlx()
+	url := "https://www.olx.pt/imoveis/"
+
+	olx.Run(url)
+
+	for key, value := range olx.entries {
+		fmt.Println("Key:", key, "Value:", value)
+	}
 
 }
