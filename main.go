@@ -1,24 +1,29 @@
 package main
 
 import (
-	"log"
 	"fmt"
+	"log"
+	"regexp"
 
 	"github.com/gocolly/colly"
 )
 
 type House struct {
-	price string
+	location		string
+	price			string
 }
 
 type Olx struct {
 	scraper *colly.Collector
-	entries map[string]House
+	entries map[string]*House
 }
 
 func NewOlx() *Olx {
 
 	c := colly.NewCollector(
+		colly.URLFilters(
+			regexp.MustCompile("http[s]://www.olx.pt/.*$"),
+		),
 	//colly.Debugger(&debug.LogDebugger{}),
 	)
 
@@ -32,7 +37,7 @@ func NewOlx() *Olx {
 
 	return &Olx{
 		c,
-		make(map[string]House),
+		make(map[string]*House),
 	}
 }
 
@@ -48,12 +53,33 @@ func (o *Olx) Run(url string) {
 
 	o.scraper.OnHTML("div[class='pricelabel']", func(e *colly.HTMLElement) {
 		goquery := e.DOM
+		url := e.Request.URL.String()
 
-		attr := goquery.Find("strong").Text()
+		price := goquery.Find("strong").Text()
+		
+		if e, ok := o.entries[url]; ok {
+			e.price = price
+		} else {
+			newEntry := House{}
+			newEntry.price = price
+			o.entries[url] = &newEntry
+		}
 
-		o.entries[e.Request.URL.String()] = House{attr}
 
 	})
+
+	o.scraper.OnHTML("div[class='offer-user__location']", func (e *colly.HTMLElement) {
+		location := e.DOM.Children().Find("p").Text()
+		url := e.Request.URL.String()
+
+		if entry, ok := o.entries[url]; ok {
+			entry.location = location
+		} else {
+			newEntry := House{}
+			newEntry.location = location
+			o.entries[url] = &newEntry
+		}
+	}) 
 
 	o.scraper.Visit(url)
 
